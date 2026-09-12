@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Problem 1 — Two-Mass Spring-Damper</title>
+<style>
+:root{--ink:#172033;--muted:#64748b;--blue:#2563eb;--red:#dc2626}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Segoe UI,sans-serif;background:#f6f7fb;color:var(--ink)}
+header{background:#111827;color:#fff;padding:16px 20px}header h1{font-size:20px;margin:0 0 4px}header p{margin:0;color:#cbd5e1;font-size:13px}
+.wrap{max-width:1200px;margin:16px auto;padding:0 14px;display:grid;grid-template-columns:320px 1fr;gap:16px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 4px 16px rgba(15,23,42,.06);padding:14px}
+.eq{font-family:Georgia,serif;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px;font-size:14px;line-height:1.55}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}input{width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:7px}
+button{border:0;border-radius:8px;padding:9px 10px;font-weight:700;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:#e2e8f0}.danger{background:#fee2e2;color:#991b1b}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.full{grid-column:1/-1}
+#scene{width:100%;height:320px;display:block}#plot{width:100%;height:330px;display:block;border:1px solid #e2e8f0;border-radius:10px}
+.status{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:7px}.status b{color:var(--ink)}
+.note{font-size:12px;color:var(--muted);line-height:1.4;margin-top:10px}
+@media(max-width:850px){.wrap{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>Problem 1 — Two-Mass Spring-Damper System</h1><p>Exact free-response model from the tutorial.</p></header>
+<div class="wrap">
+<section class="card">
+<div class="eq">
+m₁ẍ₁ = −k₁x₁ − b₁ẋ₁ − k₂(x₁−x₂)<br>
+m₂ẍ₂ = −k₂(x₂−x₁) − k₃x₂ − b₂ẋ₂
+</div>
+<div class="grid">
+<div><label>m₁ (kg)</label><input id="m1" type="number" step=".1" value="1"></div>
+<div><label>m₂ (kg)</label><input id="m2" type="number" step=".1" value="1.5"></div>
+<div><label>k₁ (N/m)</label><input id="k1" type="number" step=".1" value="12"></div>
+<div><label>k₂ (N/m)</label><input id="k2" type="number" step=".1" value="18"></div>
+<div><label>k₃ (N/m)</label><input id="k3" type="number" step=".1" value="10"></div>
+<div><label>b₁ (N·s/m)</label><input id="b1" type="number" step=".1" value="1.2"></div>
+<div><label>b₂ (N·s/m)</label><input id="b2" type="number" step=".1" value=".8"></div>
+<div><label>Time scale</label><input id="speed" type="number" step=".25" value="1"></div>
+<div><label>x₁(0) (m)</label><input id="x10" type="number" step=".01" value=".20"></div>
+<div><label>x₂(0) (m)</label><input id="x20" type="number" step=".01" value="0"></div>
+<div><label>ẋ₁(0) (m/s)</label><input id="v10" type="number" step=".01" value="0"></div>
+<div><label>ẋ₂(0) (m/s)</label><input id="v20" type="number" step=".01" value="0"></div>
+</div>
+<div class="buttons">
+<button class="primary" id="run">Run / Restart</button><button class="secondary" id="pause">Pause</button>
+<button class="secondary" id="kick1">m₁ +0.10 m</button><button class="secondary" id="kick2">m₂ +0.10 m</button>
+<button class="danger full" id="reset">Reset</button>
+</div>
+<p class="note">With no external force, use a non-zero initial displacement or velocity to excite the system.</p>
+</section>
+<div>
+<section class="card">
+<canvas id="scene"></canvas>
+<div class="status"><span>t=<b id="t">0</b>s</span><span>x₁=<b id="sx1">0</b>m</span><span>x₂=<b id="sx2">0</b>m</span><span>ẋ₁=<b id="sv1">0</b>m/s</span><span>ẋ₂=<b id="sv2">0</b>m/s</span></div>
+</section>
+<section class="card" style="margin-top:16px"><canvas id="plot"></canvas></section>
+</div>
+</div>
+<script>
+const scene=document.getElementById('scene'),ctx=scene.getContext('2d');
+const plot=document.getElementById('plot'),pctx=plot.getContext('2d');
+let y=[.2,0,0,0],time=0,running=true,last=performance.now(),hist=[{t:0,x1:.2,x2:0}];
+const V=id=>Number(document.getElementById(id).value);
+function P(){return{m1:V('m1'),m2:V('m2'),k1:V('k1'),k2:V('k2'),k3:V('k3'),b1:V('b1'),b2:V('b2')}}
+function f(z){const p=P(),x1=z[0],v1=z[1],x2=z[2],v2=z[3];return[v1,(-p.k1*x1-p.b1*v1-p.k2*(x1-x2))/p.m1,v2,(-p.k2*(x2-x1)-p.k3*x2-p.b2*v2)/p.m2]}
+function add(a,b,s){return a.map((v,i)=>v+s*b[i])}
+function rk(z,h){const a=f(z),b=f(add(z,a,h/2)),c=f(add(z,b,h/2)),d=f(add(z,c,h));return z.map((v,i)=>v+h*(a[i]+2*b[i]+2*c[i]+d[i])/6)}
+function size(c){const d=devicePixelRatio||1,r=c.getBoundingClientRect();c.width=Math.max(10,r.width*d);c.height=Math.max(10,r.height*d);return{W:r.width,H:r.height,d}}
+function spring(c,x1,y0,x2,a){c.beginPath();c.moveTo(x1,y0);for(let i=1;i<14;i++)c.lineTo(x1+(x2-x1)*i/14,y0+(i%2?a:-a));c.lineTo(x2,y0);c.stroke()}
+function damper(c,x1,y0,x2){let a=x1+(x2-x1)*.3,b=x1+(x2-x1)*.6;c.beginPath();c.moveTo(x1,y0);c.lineTo(a,y0);c.lineTo(a,y0-10);c.lineTo(b,y0-10);c.lineTo(b,y0+10);c.lineTo(a,y0+10);c.lineTo(a,y0);c.moveTo(b,y0);c.lineTo(x2,y0);c.stroke()}
+function draw(){
+let s=size(scene);ctx.setTransform(s.d,0,0,s.d,0,0);ctx.clearRect(0,0,s.W,s.H);let W=s.W,H=s.H,base=H*.64,left=45,right=W-45,bw=75,bh=52,e1=W*.36,e2=W*.68,sc=Math.min(220,W*.22),c1=e1+y[0]*sc,c2=e2+y[2]*sc,m1l=c1-bw/2,m1r=c1+bw/2,m2l=c2-bw/2,m2r=c2+bw/2;
+ctx.strokeStyle='#334155';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(20,base+bh/2+9);ctx.lineTo(W-20,base+bh/2+9);ctx.stroke();
+ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(left,base-85);ctx.lineTo(left,base+65);ctx.moveTo(right,base-85);ctx.lineTo(right,base+65);ctx.stroke();ctx.lineWidth=2;
+spring(ctx,left,base+14,m1l,8);damper(ctx,left,base-18,m1l);spring(ctx,m1r,base,m2l,9);spring(ctx,m2r,base,right,8);
+ctx.fillStyle='#dbeafe';ctx.strokeStyle='#2563eb';ctx.fillRect(m1l,base-bh/2,bw,bh);ctx.strokeRect(m1l,base-bh/2,bw,bh);
+ctx.fillStyle='#fee2e2';ctx.strokeStyle='#dc2626';ctx.fillRect(m2l,base-bh/2,bw,bh);ctx.strokeRect(m2l,base-bh/2,bw,bh);
+ctx.fillStyle='#172033';ctx.font='16px Arial';ctx.fillText('m₁',c1-10,base+5);ctx.fillText('m₂',c2-10,base+5);
+ctx.fillText('k₁',(left+m1l)/2-8,base+38);ctx.fillText('b₁',(left+m1l)/2-8,base-34);ctx.fillText('k₂',(m1r+m2l)/2-8,base-20);ctx.fillText('k₃',(m2r+right)/2-8,base-20);ctx.fillText('b₂ friction',m2l,base+52);
+}
+function graph(){
+let s=size(plot);pctx.setTransform(s.d,0,0,s.d,0,0);pctx.clearRect(0,0,s.W,s.H);let W=s.W,H=s.H,L=48,R=12,T=16,B=34,tmax=Math.max(10,time),tmin=Math.max(0,tmax-10),v=hist.filter(q=>q.t>=tmin),ym=.05;v.forEach(q=>ym=Math.max(ym,Math.abs(q.x1),Math.abs(q.x2)));ym*=1.2;
+pctx.strokeStyle='#e2e8f0';for(let i=0;i<=4;i++){let yy=T+(H-T-B)*i/4;pctx.beginPath();pctx.moveTo(L,yy);pctx.lineTo(W-R,yy);pctx.stroke()}pctx.strokeStyle='#94a3b8';pctx.beginPath();pctx.moveTo(L,(T+H-B)/2);pctx.lineTo(W-R,(T+H-B)/2);pctx.stroke();
+function line(k,col){if(v.length<2)return;pctx.strokeStyle=col;pctx.lineWidth=2;pctx.beginPath();v.forEach((q,i)=>{let xx=L+(W-L-R)*(q.t-tmin)/(tmax-tmin),yy=T+(H-T-B)*(ym-q[k])/(2*ym);i?pctx.lineTo(xx,yy):pctx.moveTo(xx,yy)});pctx.stroke()}line('x1','#2563eb');line('x2','#dc2626');
+pctx.fillStyle='#475569';pctx.font='12px Arial';pctx.fillText('x₁(t) blue   x₂(t) red',L,14);pctx.fillText('time →',W/2-20,H-8)
+}
+function status(){document.getElementById('t').textContent=time.toFixed(2);document.getElementById('sx1').textContent=y[0].toFixed(3);document.getElementById('sv1').textContent=y[1].toFixed(3);document.getElementById('sx2').textContent=y[2].toFixed(3);document.getElementById('sv2').textContent=y[3].toFixed(3)}
+function restart(){y=[V('x10'),V('v10'),V('x20'),V('v20')];time=0;hist=[{t:0,x1:y[0],x2:y[2]}];running=true;last=performance.now()}
+run.onclick=restart;pause.onclick=()=>{running=!running;pause.textContent=running?'Pause':'Resume'};kick1.onclick=()=>{y[0]+=.1;running=true};kick2.onclick=()=>{y[2]+=.1;running=true};reset.onclick=()=>{y=[0,0,0,0];time=0;hist=[{t:0,x1:0,x2:0}];running=false};
+function loop(now){let dt=Math.min(.04,(now-last)/1000)*Math.max(.05,V('speed'));last=now;if(running){while(dt>0){let h=Math.min(.0025,dt);y=rk(y,h);time+=h;dt-=h}hist.push({t:time,x1:y[0],x2:y[2]});if(hist.length>5000)hist.shift()}draw();graph();status();requestAnimationFrame(loop)}restart();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
