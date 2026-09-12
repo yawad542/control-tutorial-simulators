@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Problem 2 — Coupled Pendulums</title>
+<style>
+:root{--ink:#172033;--muted:#64748b;--blue:#2563eb;--red:#dc2626;--green:#059669}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Segoe UI,sans-serif;background:#f6f7fb;color:var(--ink)}
+header{background:#111827;color:#fff;padding:16px 20px}header h1{font-size:20px;margin:0 0 4px}header p{margin:0;color:#cbd5e1;font-size:13px}
+.wrap{max-width:1200px;margin:16px auto;padding:0 14px;display:grid;grid-template-columns:330px 1fr;gap:16px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 4px 16px rgba(15,23,42,.06);padding:14px}
+.eq{font-family:Georgia,serif;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px;font-size:13px;line-height:1.55}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}input,select{width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:7px;background:#fff}
+button{border:0;border-radius:8px;padding:9px 10px;font-weight:700;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:#e2e8f0}.mode{background:#dcfce7;color:#166534}.danger{background:#fee2e2;color:#991b1b}
+.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.full{grid-column:1/-1}
+#scene{width:100%;height:350px;display:block}#plot{width:100%;height:330px;display:block;border:1px solid #e2e8f0;border-radius:10px}
+.status{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:7px}.status b{color:var(--ink)}
+.note{font-size:12px;color:var(--muted);line-height:1.4;margin-top:10px}
+@media(max-width:850px){.wrap{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>Problem 2 — Coupled Pendulums</h1><p>Horizontal spring attached at 3/4 of each massless rod.</p></header>
+<div class="wrap">
+<section class="card">
+<div class="eq">
+<b>Linearized:</b><br>
+θ̈₁+(g/l)θ₁+(9k/16m)(θ₁−θ₂)=0<br>
+θ̈₂+(g/l)θ₂+(9k/16m)(θ₂−θ₁)=0<br><br>
+<b>Nonlinear:</b><br>
+θ̈₁+(g/l)sinθ₁+(9k/16m)cosθ₁(sinθ₁−sinθ₂)=0<br>
+θ̈₂+(g/l)sinθ₂+(9k/16m)cosθ₂(sinθ₂−sinθ₁)=0
+</div>
+<label style="margin-top:12px">Equation set</label>
+<select id="model"><option value="linear">Linearized</option><option value="nonlinear">Nonlinear</option></select>
+<div class="grid">
+<div><label>m (kg)</label><input id="m" type="number" step=".1" value="1"></div>
+<div><label>l (m)</label><input id="l" type="number" step=".1" value="1"></div>
+<div><label>k (N/m)</label><input id="k" type="number" step=".5" value="8"></div>
+<div><label>g (m/s²)</label><input id="g" type="number" step=".01" value="9.81"></div>
+<div><label>θ₁(0) (deg)</label><input id="a0" type="number" step="1" value="12"></div>
+<div><label>θ₂(0) (deg)</label><input id="b0" type="number" step="1" value="0"></div>
+<div><label>θ̇₁(0) (deg/s)</label><input id="wa0" type="number" step="1" value="0"></div>
+<div><label>θ̇₂(0) (deg/s)</label><input id="wb0" type="number" step="1" value="0"></div>
+</div>
+<div class="buttons">
+<button class="primary" id="run">Run / Restart</button><button class="secondary" id="pause">Pause</button>
+<button class="mode" id="inphase">In-phase</button><button class="mode" id="outphase">Out-of-phase</button>
+<button class="danger full" id="reset">Reset</button>
+</div>
+<p class="note">Compare the normal modes: θ₁=θ₂ means almost no spring deformation; θ₁=−θ₂ stretches the spring strongly and oscillates faster.</p>
+</section>
+<div>
+<section class="card"><canvas id="scene"></canvas><div class="status"><span>t=<b id="t">0</b>s</span><span>θ₁=<b id="sa">0</b>°</span><span>θ₂=<b id="sb">0</b>°</span><span>Δx≈<b id="dx">0</b>m</span></div></section>
+<section class="card" style="margin-top:16px"><canvas id="plot"></canvas></section>
+</div>
+</div>
+<script>
+const D=Math.PI/180,R=180/Math.PI,scene=document.getElementById('scene'),ctx=scene.getContext('2d'),plot=document.getElementById('plot'),pctx=plot.getContext('2d');
+let y=[12*D,0,0,0],time=0,running=true,last=performance.now(),hist=[{t:0,a:12,b:0}];
+const V=id=>Number(document.getElementById(id).value);
+function P(){return{m:V('m'),l:V('l'),k:V('k'),g:V('g'),model:document.getElementById('model').value}}
+function f(z){let p=P(),a=z[0],wa=z[1],b=z[2],wb=z[3],c=9*p.k/(16*p.m),aa,bb;if(p.model==='linear'){aa=-(p.g/p.l)*a-c*(a-b);bb=-(p.g/p.l)*b-c*(b-a)}else{aa=-(p.g/p.l)*Math.sin(a)-c*Math.cos(a)*(Math.sin(a)-Math.sin(b));bb=-(p.g/p.l)*Math.sin(b)-c*Math.cos(b)*(Math.sin(b)-Math.sin(a))}return[wa,aa,wb,bb]}
+function add(a,b,s){return a.map((v,i)=>v+s*b[i])}function rk(z,h){let a=f(z),b=f(add(z,a,h/2)),c=f(add(z,b,h/2)),d=f(add(z,c,h));return z.map((v,i)=>v+h*(a[i]+2*b[i]+2*c[i]+d[i])/6)}
+function size(c){let d=devicePixelRatio||1,r=c.getBoundingClientRect();c.width=Math.max(10,r.width*d);c.height=Math.max(10,r.height*d);return{W:r.width,H:r.height,d}}
+function spring(c,x1,y0,x2){c.beginPath();c.moveTo(x1,y0);for(let i=1;i<18;i++)c.lineTo(x1+(x2-x1)*i/18,y0+(i%2?7:-7));c.lineTo(x2,y0);c.stroke()}
+function draw(){let s=size(scene);ctx.setTransform(s.d,0,0,s.d,0,0);ctx.clearRect(0,0,s.W,s.H);let W=s.W,H=s.H,p=P(),x1=W*.34,x2=W*.66,py=50,L=Math.min(220,H*.62),q=.75*L,a=y[0],b=y[2],bx1=x1+L*Math.sin(a),by1=py+L*Math.cos(a),bx2=x2+L*Math.sin(b),by2=py+L*Math.cos(b),ax1=x1+q*Math.sin(a),ay1=py+q*Math.cos(a),ax2=x2+q*Math.sin(b),ay2=py+q*Math.cos(b),sy=(ay1+ay2)/2;
+ctx.strokeStyle='#475569';ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(x1-70,py-22);ctx.lineTo(x2+70,py-22);ctx.stroke();
+ctx.setLineDash([5,5]);ctx.strokeStyle='#cbd5e1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x1,py);ctx.lineTo(x1,py+L+15);ctx.moveTo(x2,py);ctx.lineTo(x2,py+L+15);ctx.stroke();ctx.setLineDash([]);
+ctx.strokeStyle='#334155';ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(x1,py);ctx.lineTo(bx1,by1);ctx.moveTo(x2,py);ctx.lineTo(bx2,by2);ctx.stroke();
+ctx.strokeStyle='#059669';ctx.lineWidth=2;spring(ctx,ax1,sy,ax2);ctx.fillStyle='#047857';ctx.font='14px Arial';ctx.fillText('k',(ax1+ax2)/2,sy-13);
+ctx.fillStyle='#dbeafe';ctx.strokeStyle='#2563eb';ctx.lineWidth=2;ctx.beginPath();ctx.arc(bx1,by1,18,0,7);ctx.fill();ctx.stroke();ctx.fillStyle='#fee2e2';ctx.strokeStyle='#dc2626';ctx.beginPath();ctx.arc(bx2,by2,18,0,7);ctx.fill();ctx.stroke();
+ctx.fillStyle='#172033';ctx.font='14px Arial';ctx.fillText('m',bx1-5,by1+5);ctx.fillText('m',bx2-5,by2+5);ctx.fillText('θ₁ '+(a*R).toFixed(1)+'°',x1-35,py+25);ctx.fillText('θ₂ '+(b*R).toFixed(1)+'°',x2+10,py+25)}
+function graph(){let s=size(plot);pctx.setTransform(s.d,0,0,s.d,0,0);pctx.clearRect(0,0,s.W,s.H);let W=s.W,H=s.H,L=48,Rr=12,T=16,B=34,tmax=Math.max(10,time),tmin=Math.max(0,tmax-10),v=hist.filter(q=>q.t>=tmin),ym=5;v.forEach(q=>ym=Math.max(ym,Math.abs(q.a),Math.abs(q.b)));ym*=1.15;
+pctx.strokeStyle='#e2e8f0';for(let i=0;i<=4;i++){let yy=T+(H-T-B)*i/4;pctx.beginPath();pctx.moveTo(L,yy);pctx.lineTo(W-Rr,yy);pctx.stroke()}pctx.strokeStyle='#94a3b8';pctx.beginPath();pctx.moveTo(L,(T+H-B)/2);pctx.lineTo(W-Rr,(T+H-B)/2);pctx.stroke();
+function line(k,col){if(v.length<2)return;pctx.strokeStyle=col;pctx.lineWidth=2;pctx.beginPath();v.forEach((q,i)=>{let xx=L+(W-L-Rr)*(q.t-tmin)/(tmax-tmin),yy=T+(H-T-B)*(ym-q[k])/(2*ym);i?pctx.lineTo(xx,yy):pctx.moveTo(xx,yy)});pctx.stroke()}line('a','#2563eb');line('b','#dc2626');pctx.fillStyle='#475569';pctx.font='12px Arial';pctx.fillText('θ₁(t) blue   θ₂(t) red',L,14);pctx.fillText('time →',W/2-20,H-8)}
+function status(){let p=P(),dx=.75*p.l*(Math.sin(y[2])-Math.sin(y[0]));t.textContent=time.toFixed(2);sa.textContent=(y[0]*R).toFixed(2);sb.textContent=(y[2]*R).toFixed(2);document.getElementById('dx').textContent=dx.toFixed(3)}
+function restart(){y=[V('a0')*D,V('wa0')*D,V('b0')*D,V('wb0')*D];time=0;hist=[{t:0,a:y[0]*R,b:y[2]*R}];running=true;last=performance.now()}
+run.onclick=restart;pause.onclick=()=>{running=!running;pause.textContent=running?'Pause':'Resume'};inphase.onclick=()=>{y=[10*D,0,10*D,0];time=0;hist=[{t:0,a:10,b:10}];running=true};outphase.onclick=()=>{y=[10*D,0,-10*D,0];time=0;hist=[{t:0,a:10,b:-10}];running=true};reset.onclick=()=>{y=[0,0,0,0];time=0;hist=[{t:0,a:0,b:0}];running=false};model.onchange=restart;
+function loop(now){let dt=Math.min(.04,(now-last)/1000);last=now;if(running){while(dt>0){let h=Math.min(.0015,dt);y=rk(y,h);time+=h;dt-=h}hist.push({t:time,a:y[0]*R,b:y[2]*R});if(hist.length>5000)hist.shift()}draw();graph();status();requestAnimationFrame(loop)}restart();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
